@@ -1,1 +1,163 @@
+---
+title: "Final Project"
+author: "Michael Dunst & Sofia Fasullo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+knit: (function(input, encoding) {
+    rmarkdown::render(
+      input = input,
+      encoding = encoding,
+      envir = globalenv()
+    )
+  })    
+---
+
+```{r setup, echo=FALSE, install= TRUE, cache=TRUE, message=FALSE, results=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+# Load some libraries
+rm(list = ls())
+library(tidycensus)
+library(dplyr)
+library(viridis)
+library(tidyverse)
+library(sf)
+library(spdep)
+library(caret)
+library(ckanr)
+library(FNN)
+library(grid)
+library(gridExtra)
+library(ggcorrplot) # plot correlation plot
+library(corrr)      # another way to plot correlation plot
+library(kableExtra)
+library(jtools)     # for regression model plots
+library(ggstance) # to support jtools plots
+library(ggpubr)    # plotting R^2 value on ggplot point scatter
+library(broom.mixed) # needed for effects plots
+library(stargazer)
+options(scipen=999) #scientific notation off
+
+# Functions and data directory
+census_api_key("8c8e36c4b5046c4d7f8a5d9f0f7a7d0ddde86e8b")
+
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
+palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
+palette2 <- c("#981FAC","#FF006A")
+
+```
+
+
+
+```{r import listings}
+
+listings <- read.csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings.csv")
+
+listing_details <- read.csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings_details.csv")
+```
+
+```{r clean data}
+
+listing_details <- listing_details %>%
+  select(1,23,26,29,39,40,49,50,52:57,60,61,80,96)
+
+listings <- listings %>%
+  select(1)
+
+full_listings <- merge(listings,listing_details,by="id")
+
+full_listings <- full_listings %>% mutate(price = price %>% str_remove_all("[$,]") %>% as.numeric())
+
+full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs="EPSG:28992")
+```
+
+
+
+```{r data exploration}
+ggplot(full_listings, aes(square_feet,price))+
+  geom_jitter(height=2,width=2)+
+  ylim(0,1000)+
+  xlim(0,3000)+
+  theme_minimal()
+  
+ggplot(full_listings, aes(bedrooms,price))+ 
+  geom_bar(position = "dodge", stat = "summary", fun = "mean")+
+  theme_minimal()
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
