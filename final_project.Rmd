@@ -123,8 +123,8 @@ full_listings %>%
 
 ggplot(full_listings, aes(property_type,price))+ 
   geom_bar(position = "dodge", stat = "summary", fun = "mean", fill="darkgreen")+
-  labs(x="Bedrooms", y="Nightly Rate",
-             title = "Number of Bedrooms vs. Price",
+  labs(x="Property Type", y="Nightly Rate",
+             title = "Type of Property vs. Price",
              subtitle = "Amsterdam Airbnbs")+
   coord_flip()+
   theme_minimal()
@@ -141,32 +141,70 @@ ggplot() +
   geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))
 ```
 
+```{r monuments}
+
+monuments.sf <- st_read("https://map.data.amsterdam.nl/maps/monumenten?REQUEST=GetFeature&SERVICE=wfs&version=2.0.0&typenames=monument_coordinaten&outputformat=geojson&srsName=urn:ogc:def:crs:EPSG::4326") %>%
+  st_transform(st_crs(full_listings.sf))
+
+ggplot() +
+  geom_sf(data = monuments.sf, aes(color=monumentstatus))
+
+monuments.sf <- monuments.sf %>% filter(st_geometry_type(geometry)=="POINT")
+
+full_listings.sf <-
+  full_listings.sf %>% 
+    mutate(
+      monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
+                              st_coordinates(monuments.sf), k = 3))
+
+ggplot()+
+  geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))+
+  geom_sf(data = monuments.sf, aes(color=monumentstatus))
+
+intersection <- st_intersection(x = AMS_neighborhoods.sf, y = monuments.sf)
+
+
+neighborhood_monuments <-
+   intersection %>% 
+  group_by(neighbourhood) %>% 
+  count()
+
+full_listings.sf <- 
+  merge(full_listings.sf,st_drop_geometry(neighborhood_monuments),by.x="neighbourhood_cleansed",by.y="neighbourhood")
+
+```
+
+
+```{r graph monument}
+
+ggplot()+
+  geom_point(data=full_listings.sf,mapping=aes(n,log10(price)))+
+  labs(x="# of Monuments", y="Nightly Rate",
+             title = "Monuments in Vicinity vs. Price",
+             subtitle = "Amsterdam Airbnbs")+
+  theme_minimal()
+
+ggplot()+
+  geom_histogram(data=full_listings.sf,mapping=aes(log10(price)))
+```
 
 
 
+```{r corr table}
+numericVars <- select_if(st_drop_geometry(full_listings.sf), is.numeric) %>% na.omit()
+
+ggcorrplot(
+  round(cor(numericVars), 1),
+  p.mat = cor_pmat(numericVars),
+  colors = c("deepskyblue", "grey100", "firebrick1"),
+  type="lower",
+  insig = "blank") +  
+    labs(title = "Correlation Matrix of Numeric Variables", tl.cex = 0.5, tl.col = "black") +
+  plotTheme()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```
 
 
 
