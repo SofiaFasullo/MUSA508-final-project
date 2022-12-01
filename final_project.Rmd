@@ -81,27 +81,65 @@ full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs=
 
 
 ```{r data exploration}
-ggplot(full_listings, aes(square_feet,price))+
-  geom_jitter(height=2,width=2)+
+ggplot(full_listings, aes(review_scores_rating,price))+
+  geom_jitter(height=1,width=1)+
+  xlim(50,100)+
   ylim(0,1000)+
-  xlim(0,3000)+
+  labs(x="User Ratings", y="Nightly Rate",
+             title = "User Experience vs. Price",
+             subtitle = "Amsterdam Airbnbs")+ 
   theme_minimal()
+#General increase in price as ratings go up.
   
 ggplot(full_listings, aes(bedrooms,price))+ 
-  geom_bar(position = "dodge", stat = "summary", fun = "mean")+
+  geom_bar(position = "dodge", stat = "summary", fun = "mean", fill="darkgreen")+
+  labs(x="Bedrooms", y="Nightly Rate",
+             title = "Number of Bedrooms vs. Price",
+             subtitle = "Amsterdam Airbnbs")+ 
   theme_minimal()
+#No general trend by number of bedrooms.
 
+full_listings %>%
+  drop_na(host_response_time) %>% #This drop na isn't working as intended
+ggplot(., aes(host_response_time,price))+ 
+  geom_bar(position = "dodge", stat = "summary", fun = "mean", fill="darkgreen")+
+  labs(x="Bedrooms", y="Nightly Rate",
+             title = "Number of Bedrooms vs. Price",
+             subtitle = "Amsterdam Airbnbs")+ 
+  theme_minimal()
+#No association between responsiveness and nightly rate.
 
+full_listings %>% 
+	group_by(property_type) %>% 
+	summarise(count = n()) %>% 
+	ggplot(aes(x = reorder(property_type,(count)), y = count)) + 
+		geom_bar(stat = 'identity', fill="darkgreen") + 
+		theme_minimal()+
+  scale_y_log10()+
+  labs(x="Property Type", y="Count (Log-scaled)",
+             title = "Types of Airbnb Properties",
+             subtitle = "Amsterdam")+
+  coord_flip()
 
-
-
-
-
+ggplot(full_listings, aes(property_type,price))+ 
+  geom_bar(position = "dodge", stat = "summary", fun = "mean", fill="darkgreen")+
+  labs(x="Bedrooms", y="Nightly Rate",
+             title = "Number of Bedrooms vs. Price",
+             subtitle = "Amsterdam Airbnbs")+
+  coord_flip()+
+  theme_minimal()
+#Nothing sticks out...except lighthouses!
 ```
 
 
+```{r new features}
+AMS_neighborhoods.sf <- 
+  st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/neighbourhoods.geojson") %>%
+  st_transform(st_crs(full_listings.sf))
 
-
+ggplot() +
+  geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))
+```
 
 
 
