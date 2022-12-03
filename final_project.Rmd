@@ -103,8 +103,8 @@ full_listings %>%
   drop_na(host_response_time) %>% #This drop na isn't working as intended
 ggplot(., aes(host_response_time,price))+ 
   geom_bar(position = "dodge", stat = "summary", fun = "mean", fill="darkgreen")+
-  labs(x="Bedrooms", y="Nightly Rate",
-             title = "Number of Bedrooms vs. Price",
+  labs(x="Host response time", y="Nightly Rate",
+             title = "Host Eagerness to Rent vs. Price",
              subtitle = "Amsterdam Airbnbs")+ 
   theme_minimal()
 #No association between responsiveness and nightly rate.
@@ -130,7 +130,8 @@ ggplot(full_listings, aes(property_type,price))+
   theme_minimal()
 #Nothing sticks out...except lighthouses!
 ```
-
+some notes:
+lighthouse looks like an outlier
 
 ```{r new features}
 AMS_neighborhoods.sf <- 
@@ -178,7 +179,7 @@ full_listings.sf <-
 ```{r graph monument}
 
 ggplot()+
-  geom_point(data=full_listings.sf,mapping=aes(n,log10(price)))+
+  geom_point(data=full_listings.sf,mapping=aes(n,price))+
   labs(x="# of Monuments", y="Nightly Rate",
              title = "Monuments in Vicinity vs. Price",
              subtitle = "Amsterdam Airbnbs")+
@@ -207,9 +208,35 @@ ggcorrplot(
 ```
 
 
+```{r}
+fullOLS.lm = lm(log10(price)~.,data=st_drop_geometry(full_listings.sf))
+#summary(fullOLS.lm)#this makes me cry
 
+#variable thoughts
+#host_since turn into time been a host
+#host it superhost turn into 0-1
+#delete neighborhood, lat, long, square feet
 
+fullOLS.lm2 = lm(log10(price)~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3)) %>% st_drop_geometry() %>%  na.omit())
+summary(fullOLS.lm2)
+```
 
+```{r}
+#the model based on our diagnostics that would be useful
+#the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
+
+trimmedOLS.lm = lm(log10(price)~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(full_listings.sf) %>% drop_na())
+summary(trimmedOLS.lm)
+#result: trying to use only the variables we think are good makes the R^2 drop a lot
+```
+#some feature engineering
+```{r}
+full_listings.sf = full_listings.sf %>% mutate(
+  superhost = ifelse(host_is_superhost=="t",1,0),
+  year = as.numeric(separate(host_since,into=c('year'),sep=(4)))
+  )
+
+```
 
 
 
