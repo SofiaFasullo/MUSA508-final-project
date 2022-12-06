@@ -148,32 +148,46 @@ ggplot() +
 monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json") %>%
   st_transform(st_crs(full_listings.sf))
 
+#neither of these worked!
+
+#full_listings.sf <-
+#  full_listings.sf %>% 
+#    mutate(
+#      monuments_nn3 = #nn_function(st_coordinates(full_listings.sf), 
+#                              st_coordinates(monuments.sf), k = #3))
+
+
+
+#intersection <- st_intersection(x = AMS_neighborhoods.sf, y = monuments.sf)
+
+
+#neighborhood_monuments <-
+#   intersection %>% 
+#  group_by(neighbourhood) %>% 
+#  count()
+#
+#full_listings.sf <- 
+#  merge(full_listings.sf,st_drop_geometry(neighborhood_monument#s),by.x="neighbourhood_cleansed",by.y="neighbourhood")
+#
+nhood_rings.sf <- multipleRingBuffer(st_union(monuments.sf),3218,402) %>% plot()
+
+nhood_dist = 
+  st_buffer(st_union(monuments.sf),dist = 402) %>% st_crs(full_listings.sf)
+
+mons = st_union(monuments.sf)
+
+listings_dist =
+  full_listings.sf %>% mutate(monumentDist = st_distance(x=full_listings.sf$geometry,y=mons$geometry))
+
 
 ggplot() +
-  geom_sf(data = monuments.sf, aes(color=monumentstatus))
-
-monuments.sf <- monuments.sf %>% filter(st_geometry_type(geometry)=="POINT")
-
-full_listings.sf <-
-  full_listings.sf %>% 
-    mutate(
-      monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
-                              st_coordinates(monuments.sf), k = 3))
-
-ggplot()+
-  geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))+
-  geom_sf(data = monuments.sf, aes(color=monumentstatus))
-
-intersection <- st_intersection(x = AMS_neighborhoods.sf, y = monuments.sf)
+  geom_sf(data=tracts20, aes(fill=q5(distance))) +
+  geom_sf(data=Metra) +
+  ggtitle("Distance to Metra Stations") +
+  mapTheme()
+  
 
 
-neighborhood_monuments <-
-   intersection %>% 
-  group_by(neighbourhood) %>% 
-  count()
-
-full_listings.sf <- 
-  merge(full_listings.sf,st_drop_geometry(neighborhood_monuments),by.x="neighbourhood_cleansed",by.y="neighbourhood")
 
 ```
 
@@ -262,38 +276,27 @@ full_listings.sf = full_listings.sf %>% mutate(
 ```{r}
 coords <- st_coordinates(full_listings.sf) 
 
-neighborList <- knn2nb(knearneigh(coords, 3)) #3 nearest neighbors
+neighborList <- knn2nb(knearneigh(coords, 5)) #5 nearest neighbors
 
 spatialWeights <- nb2listw(neighborList, style="W")
 
 full_listings.sf$lagPrice <- lag.listw(spatialWeights, full_listings.sf$price) 
 
 ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) + 
-  geom_point() + geom_abline()
-#doesn't seem super helpful
+  geom_point() + geom_smooth(method="lm") + stat_cor(method="pearson") +
+  xlim(0,1500) + ylim(0,1500)
 
-full_listings.sf$lagLogPrice <- lag.listw(spatialWeights, round(full_listings.sf$logPrice,digits = 10)) #non finite?
-
-ggplot(data=full_listings.sf,mapping = aes(x=lagLogPrice,y=logPrice)) + 
-  geom_point() + geom_abline()
 ```
 
 ```{r}
-#not sure how to get this to work
-
-left_join(
-  st_drop_geometry(full_listings.sf) %>%
-    group_by(neighbourhood_cleansed) %>%
-    summarize(meanPrice = mean(price, na.rm = T)),
-  mutate(full_listings.sf, predict.fe = 
-                        predict(lm(logPrice ~ neighborhood_cleansed, data = full_listings.sf) %>% exp(), 
-                        full_listings.sf)) %>%
-    st_drop_geometry %>%
-    group_by(neighborhood_cleansed) %>%
-      summarize(meanPrediction = mean(predict.fe))) %>%
-      kable() %>% kable_styling()
+smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(drop_na(full_listings.sf)))
+summary(smarter_model)
 ```
 
+```{r}
+smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(full_listings.sf,-price))))
+summary(smarter_model)
+```
 
 
 
