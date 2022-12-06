@@ -145,7 +145,7 @@ ggplot() +
 
 ```{r monuments}
 
-monuments.sf <- st_read("https://map.data.amsterdam.nl/maps/monumenten?REQUEST=GetFeature&SERVICE=wfs&version=2.0.0&typenames=monument_coordinaten&outputformat=geojson&srsName=urn:ogc:def:crs:EPSG::4326") %>%
+monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json") %>%
   st_transform(st_crs(full_listings.sf))
 
 ggplot() +
