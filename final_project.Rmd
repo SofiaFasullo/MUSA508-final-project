@@ -39,6 +39,7 @@ library(ggstance) # to support jtools plots
 library(ggpubr)    # plotting R^2 value on ggplot point scatter
 library(broom.mixed) # needed for effects plots
 library(stargazer)
+library(readr)
 options(scipen=999) #scientific notation off
 
 # Functions and data directory
@@ -58,9 +59,9 @@ palette2 <- c("#981FAC","#FF006A")
 
 ```{r import listings}
 
-listings <- read.csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings.csv")
+listings <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings.csv")
 
-listing_details <- read.csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings_details.csv")
+listing_details <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings_details.csv")
 ```
 
 ```{r clean data}
@@ -186,7 +187,17 @@ ggplot()+
   theme_minimal()
 
 ggplot()+
+  geom_histogram(data=full_listings.sf,mapping=aes(price))
+
+ggplot()+
   geom_histogram(data=full_listings.sf,mapping=aes(log10(price)))
+
+#clearly, taking the log of price normalizes the variable, wwhich is an assumption of regression models
+
+#create a new variable of the log of price
+full_listings.sf = full_listings.sf %>% mutate(
+  logPrice = log10(price)
+)
 ```
 
 
@@ -209,7 +220,9 @@ ggcorrplot(
 
 
 ```{r}
-fullOLS.lm = lm(log10(price)~.,data=st_drop_geometry(full_listings.sf))
+#should split dataset into training and testing before
+
+fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(full_listings.sf,-price)))
 #summary(fullOLS.lm)#this makes me cry
 
 #variable thoughts
@@ -217,7 +230,7 @@ fullOLS.lm = lm(log10(price)~.,data=st_drop_geometry(full_listings.sf))
 #host it superhost turn into 0-1
 #delete neighborhood, lat, long, square feet
 
-fullOLS.lm2 = lm(log10(price)~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3)) %>% st_drop_geometry() %>%  na.omit())
+fullOLS.lm2 = lm(logPrice~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
 summary(fullOLS.lm2)
 ```
 
@@ -225,7 +238,7 @@ summary(fullOLS.lm2)
 #the model based on our diagnostics that would be useful
 #the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
-trimmedOLS.lm = lm(log10(price)~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(full_listings.sf) %>% drop_na())
+trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(full_listings.sf) %>% drop_na())
 summary(trimmedOLS.lm)
 #result: trying to use only the variables we think are good makes the R^2 drop a lot
 ```
@@ -238,7 +251,47 @@ full_listings.sf = full_listings.sf %>% mutate(
 
 ```
 
+```{r}
+#some notes to move forward!
+#Chapter 4 of the textbook talks about fixed neighborhood effects and how to account for them (oour variable n is a fixed neighborhood effect)
+#chapter 4 also goes into predicting price using spatial clustering of price
+```
 
+#spatial clustering of price
+```{r}
+coords <- st_coordinates(full_listings.sf) 
+
+neighborList <- knn2nb(knearneigh(coords, 3)) #3 nearest neighbors
+
+spatialWeights <- nb2listw(neighborList, style="W")
+
+full_listings.sf$lagPrice <- lag.listw(spatialWeights, full_listings.sf$price) 
+
+ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) + 
+  geom_point() + geom_abline()
+#doesn't seem super helpful
+
+full_listings.sf$lagLogPrice <- lag.listw(spatialWeights, round(full_listings.sf$logPrice,digits = 10)) #non finite?
+
+ggplot(data=full_listings.sf,mapping = aes(x=lagLogPrice,y=logPrice)) + 
+  geom_point() + geom_abline()
+```
+
+```{r}
+#not sure how to get this to work
+
+left_join(
+  st_drop_geometry(full_listings.sf) %>%
+    group_by(neighbourhood_cleansed) %>%
+    summarize(meanPrice = mean(price, na.rm = T)),
+  mutate(full_listings.sf, predict.fe = 
+                        predict(lm(logPrice ~ neighborhood_cleansed, data = full_listings.sf) %>% exp(), 
+                        full_listings.sf)) %>%
+    st_drop_geometry %>%
+    group_by(neighborhood_cleansed) %>%
+      summarize(meanPrediction = mean(predict.fe))) %>%
+      kable() %>% kable_styling()
+```
 
 
 
