@@ -148,6 +148,7 @@ ggplot() +
 monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json") %>%
   st_transform(st_crs(full_listings.sf))
 
+
 ggplot() +
   geom_sf(data = monuments.sf, aes(color=monumentstatus))
 
