@@ -76,7 +76,7 @@ full_listings <- merge(listings,listing_details,by="id")
 
 full_listings <- full_listings %>% mutate(price = price %>% str_remove_all("[$,]") %>% as.numeric())
 
-full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs="EPSG:28992")
+full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs=4326)
 ```
 
 
@@ -136,8 +136,7 @@ lighthouse looks like an outlier
 
 ```{r new features}
 AMS_neighborhoods.sf <- 
-  st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/neighbourhoods.geojson") %>%
-  st_transform(st_crs(full_listings.sf))
+  st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/neighbourhoods.geojson")
 
 ggplot() +
   geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))
@@ -145,39 +144,24 @@ ggplot() +
 
 ```{r monuments}
 
-monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json") %>%
-  st_transform(st_crs(full_listings.sf))
+monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json")
+
+#Change CRS to meters
+full_listings.sf <- st_transform(full_listings.sf, crs = "EPSG:28992")
+AMS_neighborhoods.sf <- st_transform(AMS_neighborhoods.sf, crs = "EPSG:28992")
+monuments.sf <- st_transform(monuments.sf, crs = "EPSG:28992")
 
 #neither of these worked!
 
-#full_listings.sf <-
-#  full_listings.sf %>% 
-#    mutate(
-#      monuments_nn3 = #nn_function(st_coordinates(full_listings.sf), 
-#                              st_coordinates(monuments.sf), k = #3))
+full_listings.sf <-
+  full_listings.sf %>% 
+    mutate(
+      monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
+                              st_coordinates(monuments.sf), k = 3))
 
 
 
-#intersection <- st_intersection(x = AMS_neighborhoods.sf, y = monuments.sf)
 
-
-#neighborhood_monuments <-
-#   intersection %>% 
-#  group_by(neighbourhood) %>% 
-#  count()
-#
-#full_listings.sf <- 
-#  merge(full_listings.sf,st_drop_geometry(neighborhood_monument#s),by.x="neighbourhood_cleansed",by.y="neighbourhood")
-#
-nhood_rings.sf <- multipleRingBuffer(st_union(monuments.sf),3218,402) %>% plot()
-
-nhood_dist = 
-  st_buffer(st_union(monuments.sf),dist = 402) %>% st_crs(full_listings.sf)
-
-mons = st_union(monuments.sf)
-
-listings_dist =
-  full_listings.sf %>% mutate(monumentDist = st_distance(x=full_listings.sf$geometry,y=mons$geometry))
 
 
 ggplot() +
