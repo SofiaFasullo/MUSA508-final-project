@@ -143,7 +143,6 @@ ggplot() +
 ```
 
 ```{r monuments}
-
 monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json")
 
 #Change CRS to meters
@@ -151,38 +150,32 @@ full_listings.sf <- st_transform(full_listings.sf, crs = "EPSG:28992")
 AMS_neighborhoods.sf <- st_transform(AMS_neighborhoods.sf, crs = "EPSG:28992")
 monuments.sf <- st_transform(monuments.sf, crs = "EPSG:28992")
 
-#neither of these worked!
-
 full_listings.sf <-
   full_listings.sf %>% 
     mutate(
       monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
                               st_coordinates(monuments.sf), k = 3))
-
-
-
-
-
-
-ggplot() +
-  geom_sf(data=tracts20, aes(fill=q5(distance))) +
-  geom_sf(data=Metra) +
-  ggtitle("Distance to Metra Stations") +
-  mapTheme()
-  
-
-
-
 ```
 
 
 ```{r graph monument}
-
 ggplot()+
-  geom_point(data=full_listings.sf,mapping=aes(n,price))+
-  labs(x="# of Monuments", y="Nightly Rate",
-             title = "Monuments in Vicinity vs. Price",
-             subtitle = "Amsterdam Airbnbs")+
+  geom_sf(data = AMS_neighborhoods.sf, fill="gray90")+
+  geom_sf(data=monuments.sf, color="darkgreen")+
+  ggtitle("Top 20 Landmarks", subtitle = "Amsterdam, Netherlands") +
+  theme_minimal()
+
+ggplot(full_listings.sf, aes(monuments_nn3,price))+
+  geom_jitter(height=0.5,width=0.5)+
+  geom_smooth(method="lm")+
+  stat_cor(method="pearson",
+           label.x=4500,
+           label.y=950) +
+  xlim(0,7500)+
+  ylim(0,1000)+
+  labs(x="Avg. Distance to 3 Landmarks (m)", y="Nightly Rate",
+             title = "Location vs. Price",
+             subtitle = "Amsterdam Airbnbs")+ 
   theme_minimal()
 
 ggplot()+
@@ -230,23 +223,24 @@ fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(full_listings.sf,-price)
 #delete neighborhood, lat, long, square feet
 
 fullOLS.lm2 = lm(logPrice~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
-summary(fullOLS.lm2)
+
+stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Based on Selected Variables")
 ```
 
 ```{r}
 #the model based on our diagnostics that would be useful
 #the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
-trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(full_listings.sf) %>% drop_na())
-summary(trimmedOLS.lm)
+trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(full_listings.sf) %>% drop_na())
+
+stargazer(data=trimmedOLS.lm, type="text", title = "Summary Statistics for Model Based on Selected Variables", coef.omit="none")
 #result: trying to use only the variables we think are good makes the R^2 drop a lot
 ```
 #some feature engineering
 ```{r}
 full_listings.sf = full_listings.sf %>% mutate(
   superhost = ifelse(host_is_superhost=="t",1,0),
-  year = as.numeric(separate(host_since,into=c('year'),sep=(4)))
-  )
+  year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
 
 ```
 
@@ -273,13 +267,15 @@ ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) +
 ```
 
 ```{r}
-smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(drop_na(full_listings.sf)))
-summary(smarter_model)
+smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(drop_na(full_listings.sf)))
+
+stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Lag Price")
 ```
 
 ```{r}
 smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(full_listings.sf,-price))))
-summary(smarter_model)
+
+stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Using log(Price)")
 ```
 
 
