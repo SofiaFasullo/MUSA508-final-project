@@ -155,20 +155,11 @@ full_listings.sf <-
     mutate(
       monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
                               st_coordinates(monuments.sf), k = 3))
-<<<<<<< HEAD
-=======
-
-  
-
-
-
->>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
 ```
 
 
 ```{r graph monument}
 ggplot()+
-<<<<<<< HEAD
   geom_sf(data = AMS_neighborhoods.sf, fill="gray90")+
   geom_sf(data=monuments.sf, color="darkgreen")+
   ggtitle("Top 20 Landmarks", subtitle = "Amsterdam, Netherlands") +
@@ -185,12 +176,11 @@ ggplot(full_listings.sf, aes(monuments_nn3,price))+
   labs(x="Avg. Distance to 3 Landmarks (m)", y="Nightly Rate",
              title = "Location vs. Price",
              subtitle = "Amsterdam Airbnbs")+ 
-=======
+
   geom_point(data=full_listings.sf,mapping=aes(monuments_nn3,price))+
   labs(x="Distance From Monuments", y="Nightly Rate",
              title = "Monuments in Vicinity vs. Price",
              subtitle = "Amsterdam Airbnbs")+
->>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
   theme_minimal()
 
 ggplot()+
@@ -257,21 +247,21 @@ fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(listings_train,-price)))
 #host it superhost turn into 0-1
 #delete neighborhood, lat, long, square feet
 
-<<<<<<< HEAD
+
 fullOLS.lm2 = lm(logPrice~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
 
 stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Based on Selected Variables")
-=======
+
 fullOLS.lm2 = lm(logPrice~.,data= listings_train %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
 summary(fullOLS.lm2)
->>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
+
 ```
 
 ```{r}
 #the model based on our diagnostics that would be useful
 #the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
-<<<<<<< HEAD
+
 trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(full_listings.sf) %>% drop_na())
 
 stargazer(data=trimmedOLS.lm, type="text", title = "Summary Statistics for Model Based on Selected Variables", coef.omit="none")
@@ -283,13 +273,11 @@ full_listings.sf = full_listings.sf %>% mutate(
   superhost = ifelse(host_is_superhost=="t",1,0),
   year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
 
-```
-=======
 trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(listings_train) %>% drop_na())
 summary(trimmedOLS.lm)
 #result: trying to use only the variables we think are good makes the R^2 drop a lot
 ```
->>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
+
 
 ```{r}
 #some notes to move forward!
@@ -312,8 +300,20 @@ AMS_neighborhoods.sf = full_listings.sf %>%
   st_drop_geometry() %>% 
   right_join(.,AMS_neighborhoods.sf, by=c("neighbourhood_cleansed"="neighbourhood"))
 
+palette5.2 <- c("#d7191c",
+"#fdae61",
+"#ffffbf",
+"#a6d96a",
+"#1a9641")
+
 ggplot() +
-  geom_sf(data = AMS_neighborhoods.sf , aes(fill=avg_price_nhood)) #not sure why this isn't working
+  geom_sf(data = AMS_neighborhoods.sf , aes(fill=q5(avg_price_nhood), geometry = geometry))+
+  scale_fill_manual(values = rev(palette5.2),
+                   labels=qBr(AMS_neighborhoods.sf,"avg_price_nhood"),
+                   name="Quintile\nBreaks")+
+  labs(title="Nightly Rate by Neighborhood", subtitle="Amsterdam Airbnbs") +
+  theme_minimal()
+  #not sure why this isn't working
   
   
 ```
@@ -339,7 +339,7 @@ ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) +
 ```
 
 ```{r}
-<<<<<<< HEAD
+
 smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(drop_na(full_listings.sf)))
 
 stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Lag Price")
@@ -349,7 +349,7 @@ stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model
 smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(full_listings.sf,-price))))
 
 stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Using log(Price)")
-=======
+
 #recall train and testing
 listings_train = full_listings.sf[train,]
 listings_test = full_listings.sf[-train,]
@@ -361,7 +361,7 @@ summary(smarter_model)
 ```{r}
 smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(listings_train,-price))))
 summary(smarter_model)
->>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
+
 ```
 
 #Diagnostics for Generalizability and Accuracy
