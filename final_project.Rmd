@@ -155,11 +155,20 @@ full_listings.sf <-
     mutate(
       monuments_nn3 = nn_function(st_coordinates(full_listings.sf), 
                               st_coordinates(monuments.sf), k = 3))
+<<<<<<< HEAD
+=======
+
+  
+
+
+
+>>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
 ```
 
 
 ```{r graph monument}
 ggplot()+
+<<<<<<< HEAD
   geom_sf(data = AMS_neighborhoods.sf, fill="gray90")+
   geom_sf(data=monuments.sf, color="darkgreen")+
   ggtitle("Top 20 Landmarks", subtitle = "Amsterdam, Netherlands") +
@@ -176,13 +185,27 @@ ggplot(full_listings.sf, aes(monuments_nn3,price))+
   labs(x="Avg. Distance to 3 Landmarks (m)", y="Nightly Rate",
              title = "Location vs. Price",
              subtitle = "Amsterdam Airbnbs")+ 
+=======
+  geom_point(data=full_listings.sf,mapping=aes(monuments_nn3,price))+
+  labs(x="Distance From Monuments", y="Nightly Rate",
+             title = "Monuments in Vicinity vs. Price",
+             subtitle = "Amsterdam Airbnbs")+
+>>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
   theme_minimal()
 
 ggplot()+
-  geom_histogram(data=full_listings.sf,mapping=aes(price))
+  geom_histogram(data=full_listings.sf,mapping=aes(price)) +
+  labs(x="Nightly Rate", y="Frequency",
+             title = "Distribution of Nightly Rate Prices",
+             subtitle = "Amsterdam Airbnbs")+
+  theme_minimal()
 
 ggplot()+
-  geom_histogram(data=full_listings.sf,mapping=aes(log10(price)))
+  geom_histogram(data=full_listings.sf,mapping=aes(log10(price))) +
+  labs(x="Nightly Rate", y="Frequency",
+             title = "Distribution of Logarithmic Transformation",
+             subtitle = "Amsterdam Airbnbs")+
+  theme_minimal()
 
 #clearly, taking the log of price normalizes the variable, wwhich is an assumption of regression models
 
@@ -209,12 +232,24 @@ ggcorrplot(
 
 
 ```
+#some feature engineering
+```{r}
+#full_listings.sf = full_listings.sf %>% mutate(
+# superhost = ifelse(host_is_superhost=="t",1,0),
+#  year = as.numeric(separate(host_since,into=c('year'),sep=(4)))
+#  )
+# error ! no applicable method for 'separate' applied to an object of class "Date"
+```
 
 
 ```{r}
 #should split dataset into training and testing before
 
-fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(full_listings.sf,-price)))
+train = createDataPartition(y=full_listings.sf$logPrice, times = 1, p = 0.5, list=FALSE)
+listings_train = full_listings.sf[train,]
+listings_test = full_listings.sf[-train,]
+
+fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(listings_train,-price)))
 #summary(fullOLS.lm)#this makes me cry
 
 #variable thoughts
@@ -222,15 +257,21 @@ fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(full_listings.sf,-price)
 #host it superhost turn into 0-1
 #delete neighborhood, lat, long, square feet
 
+<<<<<<< HEAD
 fullOLS.lm2 = lm(logPrice~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
 
 stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Based on Selected Variables")
+=======
+fullOLS.lm2 = lm(logPrice~.,data= listings_train %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
+summary(fullOLS.lm2)
+>>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
 ```
 
 ```{r}
 #the model based on our diagnostics that would be useful
 #the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
+<<<<<<< HEAD
 trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(full_listings.sf) %>% drop_na())
 
 stargazer(data=trimmedOLS.lm, type="text", title = "Summary Statistics for Model Based on Selected Variables", coef.omit="none")
@@ -243,6 +284,12 @@ full_listings.sf = full_listings.sf %>% mutate(
   year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
 
 ```
+=======
+trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(listings_train) %>% drop_na())
+summary(trimmedOLS.lm)
+#result: trying to use only the variables we think are good makes the R^2 drop a lot
+```
+>>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
 
 ```{r}
 #some notes to move forward!
@@ -251,6 +298,27 @@ full_listings.sf = full_listings.sf %>% mutate(
 ```
 
 #spatial clustering of price
+```{r}
+#basic understanding of price distribution
+
+ggplot() +
+  geom_sf(data = full_listings.sf, aes(color=q5(logPrice)), legend=FALSE)
+#well this isn't helpful!
+
+#aggregate price by neighborhood instead
+AMS_neighborhoods.sf = full_listings.sf %>% 
+  group_by(neighbourhood_cleansed) %>% 
+  summarize(avg_price_nhood = mean(price)) %>% 
+  st_drop_geometry() %>% 
+  right_join(.,AMS_neighborhoods.sf, by=c("neighbourhood_cleansed"="neighbourhood"))
+
+ggplot() +
+  geom_sf(data = AMS_neighborhoods.sf , aes(fill=avg_price_nhood)) #not sure why this isn't working
+  
+  
+```
+
+
 ```{r}
 coords <- st_coordinates(full_listings.sf) 
 
@@ -262,11 +330,16 @@ full_listings.sf$lagPrice <- lag.listw(spatialWeights, full_listings.sf$price)
 
 ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) + 
   geom_point() + geom_smooth(method="lm") + stat_cor(method="pearson") +
-  xlim(0,1500) + ylim(0,1500)
+  xlim(0,1500) + ylim(0,1500)+
+  labs(x="Spatial Lag of Price", y="Price",
+             title = "Spatial Correlation of Nightly Rate Price",
+             subtitle = "Amsterdam Airbnbs")+
+  theme_minimal()
 
 ```
 
 ```{r}
+<<<<<<< HEAD
 smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(drop_na(full_listings.sf)))
 
 stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Lag Price")
@@ -276,8 +349,53 @@ stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model
 smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(full_listings.sf,-price))))
 
 stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Using log(Price)")
+=======
+#recall train and testing
+listings_train = full_listings.sf[train,]
+listings_test = full_listings.sf[-train,]
+
+smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(drop_na(listings_train)))
+summary(smarter_model)
 ```
 
+```{r}
+smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(listings_train,-price))))
+summary(smarter_model)
+>>>>>>> 950524d97b169b750721221402ea4e5a93e8ec45
+```
+
+#Diagnostics for Generalizability and Accuracy
+```{r}
+#smarter_model seems like our best bet
+#accuracy test: error for test dataset
+MSE = mean((exp(listings_test$logPrice) - exp(predict(smarter_model,data=st_drop_geometry(drop_na(select(listings_train,-price))))))^2)
+#MSE #6 mean square error is pretty good?!
+MAE = mean(abs(exp(listings_test$logPrice) - exp(predict(smarter_model,data=st_drop_geometry(drop_na(select(listings_train,-price)))))))
+MAE
+
+#vs our model without the secret sauce
+MSE_1stmod = mean((exp(listings_test$logPrice) - exp(predict(fullOLS.lm,data=st_drop_geometry(drop_na(select(listings_train,-c(price,lagPrice))))))^2))
+#MSE_1stmod
+MAE_1stmod = mean(abs(exp(listings_test$logPrice) - exp(predict(fullOLS.lm,data=st_drop_geometry(drop_na(select(listings_train,-c(price,lagPrice))))))))
+MAE_1stmod
+#first model with no data engineering and variable selection is better with accuracy BUT
+
+
+#generalizability test 
+kfolds <- trainControl(method = "cv", number = 20)
+set.seed(825)
+
+reg.cv <- 
+  train(logPrice ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(lagPrice,host_response_time,host_is_superhost,neighbourhood_cleansed,bedrooms,review_scores_rating,reviews_per_month,logPrice) %>% drop_na(), 
+     method = "lm", trControl = kfolds, na.action = na.pass)
+
+reg.cv
+
+first.cv <- 
+  train(logPrice ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(-c(price,lagPrice)) %>% drop_na(), 
+     method = "lm", trControl = kfolds, na.action = na.pass)
+first.cv
+```
 
 
 
