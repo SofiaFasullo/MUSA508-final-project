@@ -40,6 +40,7 @@ library(ggpubr)    # plotting R^2 value on ggplot point scatter
 library(broom.mixed) # needed for effects plots
 library(stargazer)
 library(readr)
+library(lubridate)
 options(scipen=999) #scientific notation off
 
 # Functions and data directory
@@ -64,7 +65,7 @@ listings <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/
 listing_details <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings_details.csv")
 ```
 
-```{r clean data}
+```{r clean_data cache=TRUE}
 
 listing_details <- listing_details %>%
   select(1,23,26,29,39,40,49,50,52:57,60,61,80,96)
@@ -81,7 +82,7 @@ full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs=
 
 
 
-```{r data exploration}
+```{r data_exploration, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot(full_listings, aes(review_scores_rating,price))+
   geom_jitter(height=1,width=1)+
   xlim(50,100)+
@@ -131,10 +132,9 @@ ggplot(full_listings, aes(property_type,price))+
   theme_minimal()
 #Nothing sticks out...except lighthouses!
 ```
-some notes:
-lighthouse looks like an outlier
 
-```{r new features}
+
+```{r new_features, cache = TRUE, message = FALSE, warning = FALSE}
 AMS_neighborhoods.sf <- 
   st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/neighbourhoods.geojson")
 
@@ -142,7 +142,7 @@ ggplot() +
   geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))
 ```
 
-```{r monuments}
+```{r monuments, cache = TRUE, message = FALSE, warning = FALSE}
 monuments.sf <- st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/landmarks.json")
 
 #Change CRS to meters
@@ -158,7 +158,7 @@ full_listings.sf <-
 ```
 
 
-```{r graph monument}
+```{r graph_monuments_data, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot()+
   geom_sf(data = AMS_neighborhoods.sf, fill="gray90")+
   geom_sf(data=monuments.sf, color="darkgreen")+
@@ -182,7 +182,11 @@ ggplot(full_listings.sf, aes(monuments_nn3,price))+
              title = "Monuments in Vicinity vs. Price",
              subtitle = "Amsterdam Airbnbs")+
   theme_minimal()
+```
 
+#Data Engineering
+
+``` {r transform_variable, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot()+
   geom_histogram(data=full_listings.sf,mapping=aes(price)) +
   labs(x="Nightly Rate", y="Frequency",
@@ -205,9 +209,46 @@ full_listings.sf = full_listings.sf %>% mutate(
 )
 ```
 
+```{r extract_year_from_date, cache = TRUE, message = FALSE, warning = FALSE }
+length(unique(full_listings.sf$host_since))
+#this variable is different for every observation so it is not meaningful, simplifying it to year would be more helpful
+
+full_listings.sf = full_listings.sf %>% mutate(
+  year = lubridate::year(host_since)
+)
+
+#full_listings.sf = full_listings.sf %>% mutate(
+#  superhost = ifelse(host_is_superhost=="t",1,0),
+#  year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
+
+```
+
+#Fitting a "Kitchen Sink" Model
+```{r partion_data, cache = TRUE, message = FALSE, warning = FALSE }
+#split dataset into training and testing before fitting regression model
+
+set.seed(111)
+train = createDataPartition(y=full_listings.sf$logPrice, times = 1, p = 0.5, list=FALSE)
+listings_train = full_listings.sf[train,]
+listings_test = full_listings.sf[-train,]
+```
+
+```{r kitchen_sink_model, cache = TRUE, message = FALSE, warning = FALSE }
+
+#because there are so many variables it would take up lots of space to display the whole summary, so we will just display the important parts in a table comparing models
+
+#host_since and monuments_nn3 are not useful, neighborhood has too many NAs, and price is directly correlated to logPrice
+
+fullOLS.lm = lm(logPrice~.,data= dplyr :: select(listings_train,-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
+
+summary_fullOLS = summary(fullOLS.lm)
+stargazer(data=fullOLS.lm, type="text", title = "Summary Statistics for Kitchen-Sink Model")
+
+```
 
 
-```{r corr table}
+#Assessing Which Variables to Use
+```{r corr_table, cache = TRUE, message = FALSE, warning = FALSE}
 numericVars <- select_if(st_drop_geometry(full_listings.sf), is.numeric) %>% na.omit()
 
 ggcorrplot(
@@ -219,74 +260,25 @@ ggcorrplot(
     labs(title = "Correlation Matrix of Numeric Variables", tl.cex = 0.5, tl.col = "black") +
   plotTheme()
 
-
-
-```
-#some feature engineering
-```{r}
-#full_listings.sf = full_listings.sf %>% mutate(
-# superhost = ifelse(host_is_superhost=="t",1,0),
-#  year = as.numeric(separate(host_since,into=c('year'),sep=(4)))
-#  )
-# error ! no applicable method for 'separate' applied to an object of class "Date"
 ```
 
-
-```{r}
-#should split dataset into training and testing before
-
-train = createDataPartition(y=full_listings.sf$logPrice, times = 1, p = 0.5, list=FALSE)
-listings_train = full_listings.sf[train,]
-listings_test = full_listings.sf[-train,]
-
-fullOLS.lm = lm(logPrice~.,data=st_drop_geometry(select(listings_train,-price)))
-#summary(fullOLS.lm)#this makes me cry
-
-#variable thoughts
-#host_since turn into time been a host
-#host it superhost turn into 0-1
-#delete neighborhood, lat, long, square feet
-
-
-fullOLS.lm2 = lm(logPrice~.,data= full_listings.sf %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
-
-stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Based on Selected Variables")
-
-fullOLS.lm2 = lm(logPrice~.,data= listings_train %>% dplyr :: select(-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
-summary(fullOLS.lm2)
-
-```
-
-```{r}
+#Fitting Models based on Selective Variables
+```{r selective_model, cache = TRUE, message = FALSE, warning = FALSE }
 #the model based on our diagnostics that would be useful
 #the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
 
-trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(full_listings.sf) %>% drop_na())
+trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3+year, data=st_drop_geometry(listings_train) %>% drop_na())
+
+summary_trimmedOLS = summary(trimmedOLS.lm)
 
 stargazer(data=trimmedOLS.lm, type="text", title = "Summary Statistics for Model Based on Selected Variables", coef.omit="none")
 #result: trying to use only the variables we think are good makes the R^2 drop a lot
 ```
-#some feature engineering
-```{r}
-full_listings.sf = full_listings.sf %>% mutate(
-  superhost = ifelse(host_is_superhost=="t",1,0),
-  year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
-
-trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(listings_train) %>% drop_na())
-summary(trimmedOLS.lm)
-#result: trying to use only the variables we think are good makes the R^2 drop a lot
-```
 
 
-```{r}
-#some notes to move forward!
-#Chapter 4 of the textbook talks about fixed neighborhood effects and how to account for them (oour variable n is a fixed neighborhood effect)
-#chapter 4 also goes into predicting price using spatial clustering of price
-```
-
-#spatial clustering of price
-```{r}
+#Spatial Clustering of Price - the "Secret Sauce" to a Model
+```{r nearest_neighbor, cache = TRUE, message = FALSE, warning = FALSE }
 #basic understanding of price distribution
 
 ggplot() +
@@ -319,7 +311,7 @@ ggplot() +
 ```
 
 
-```{r}
+```{r map_lagPrice, cache = TRUE, message = FALSE, warning = FALSE }
 coords <- st_coordinates(full_listings.sf) 
 
 neighborList <- knn2nb(knearneigh(coords, 5)) #5 nearest neighbors
@@ -338,34 +330,25 @@ ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) +
 
 ```
 
-```{r}
-
-smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3, data=st_drop_geometry(drop_na(full_listings.sf)))
-
-stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Lag Price")
-```
-
-```{r}
-smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(full_listings.sf,-price))))
-
-stargazer(data=fullOLS.lm2, type="text", title = "Summary Statistics for Model Using log(Price)")
-
-#recall train and testing
+```{r model_spatial_lag, cache = TRUE, message = FALSE, warning = FALSE }
+set.seed(111)
 listings_train = full_listings.sf[train,]
 listings_test = full_listings.sf[-train,]
 
-smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month, data=st_drop_geometry(drop_na(listings_train)))
-summary(smarter_model)
+smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3+year, data=st_drop_geometry(drop_na(listings_train)))
+
+stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Spatial Lag of Price")
 ```
 
-```{r}
+```{r kitchen_sink_spatial_model, cache = TRUE, message = FALSE, warning = FALSE }
+#kitchen sink with log of price
 smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(listings_train,-price))))
 summary(smarter_model)
 
 ```
 
 #Diagnostics for Generalizability and Accuracy
-```{r}
+```{r diagnostics, cache = TRUE, message = FALSE, warning = FALSE }
 #smarter_model seems like our best bet
 #accuracy test: error for test dataset
 MSE = mean((exp(listings_test$logPrice) - exp(predict(smarter_model,data=st_drop_geometry(drop_na(select(listings_train,-price))))))^2)
@@ -382,19 +365,23 @@ MAE_1stmod
 
 
 #generalizability test 
-kfolds <- trainControl(method = "cv", number = 20)
+
+fitControl <- trainControl(method = "cv", number = 100)
 set.seed(825)
 
 reg.cv <- 
-  train(logPrice ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(lagPrice,host_response_time,host_is_superhost,neighbourhood_cleansed,bedrooms,review_scores_rating,reviews_per_month,logPrice) %>% drop_na(), 
-     method = "lm", trControl = kfolds, na.action = na.pass)
+  train(price~ ., data = st_drop_geometry(full_listings.sf) %>%                       dplyr::select(lagPrice,host_response_time,host_is_superhost,neighbourhood_cleansed,bedrooms,review_scores_rating,reviews_per_month,price) %>% na.omit(), 
+     method = "lm", trControl = fitControl, na.action = na.omit)
 
 reg.cv
 
+
 first.cv <- 
-  train(logPrice ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(-c(price,lagPrice)) %>% drop_na(), 
+  train(price ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(-c(logPrice,lagPrice)) %>% drop_na(), 
      method = "lm", trControl = kfolds, na.action = na.pass)
 first.cv
+
+#so cross validation R^2 accuracy is better in the first model with more predictors but the error of the cross validated tests is lower for our tuned model, so we are favoring slightly less accuracy to higher generalizability
 ```
 
 

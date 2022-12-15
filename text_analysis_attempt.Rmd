@@ -6,25 +6,74 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Load some libraries
+rm(list = ls())
+library(tidycensus)
+library(dplyr)
+library(viridis)
+library(tidyverse)
+library(sf)
+library(spdep)
+library(caret)
+library(ckanr)
+library(FNN)
+library(grid)
+library(gridExtra)
+library(ggcorrplot) # plot correlation plot
+library(corrr)      # another way to plot correlation plot
+library(jtools)     # for regression model plots
+library(ggstance) # to support jtools plots
+library(ggpubr)    # plotting R^2 value on ggplot point scatter
+library(broom.mixed) # needed for effects plots
+library(stargazer)
+library(readr)
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(kableExtra)
+library(stringr)
+library(tidytext)
+library(yardstick)
+library(rsample)
+library(glmnet)
+library(broom)
+library(tmap)
+options(scipen=999) #scientific notation off
+
+# Functions and data directory
+census_api_key("8c8e36c4b5046c4d7f8a5d9f0f7a7d0ddde86e8b")
+
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+palette5 <- c("#981FAC","#CB0F8B","#FF006A","#FE4C35","#FE9900")
+palette4 <- c("#981FAC","#FF006A","#FE4C35","#FE9900")
+palette2 <- c("#981FAC","#FF006A")
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r import listings}
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+listings <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings.csv")
 
-```{r cars}
-summary(cars)
+listing_details <- read_csv("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/listings_details.csv")
 ```
 
-## Including Plots
+```{r clean data}
 
-You can also embed plots, for example:
+listing_details <- listing_details %>%
+  select(1,23,26,29,39,40,49,50,52:57,60,61,80,96)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+listings <- listings %>%
+  select(1)
+
+full_listings <- merge(listings,listing_details,by="id")
+
+full_listings <- full_listings %>% mutate(price = price %>% str_remove_all("[$,]") %>% as.numeric())
+
+full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs=4326)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
