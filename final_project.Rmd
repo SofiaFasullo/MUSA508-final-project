@@ -15,6 +15,9 @@ knit: (function(input, encoding) {
     )
   })    
 ---
+**Project Description**: Airbnb has become a giant in the hospitality industry by offering ordinary property owners a chance to cash in on their home by renting it out by the night. We came forward to create a more helpful model than Airbnb currently provides to give prospective hosts an accurate forecast of what their home could be worth to a jetsetting visitor.
+
+By creating this model, then packaging it in an easy to use app, homeowners can easily input their home's attributes and get an estimate. We, on the other hand, will quickly become a vital part of Airbnb's business and be a ripe target for acquisition and buyout.
 
 ```{r setup, echo=FALSE, install= TRUE, cache=TRUE, message=FALSE, results=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
@@ -56,7 +59,7 @@ palette2 <- c("#981FAC","#FF006A")
 
 ```
 
-
+###Data Collection and Explortation
 
 ```{r import listings}
 
@@ -80,7 +83,15 @@ full_listings <- full_listings %>% mutate(price = price %>% str_remove_all("[$,]
 full_listings.sf <- st_as_sf(full_listings,coords=c("longitude","latitude"),crs=4326)
 ```
 
+At first, we looked at a few sets of attributes to get a general sense of how different variables associate with each other.
 
+One of the stronger correlations is between user experience and nightly rate. One might notice that a prospective host wouldn't have a user experience score to incorporate into a prediction, but we'll come back to that.
+
+The next chart compares bedrooms and price. Unlike in a typical housing market, these is no continuous upward trend as the number of bedrooms increases. Perhaps this is due to the fact that center city apartments tend to be smaller yet more desirable.
+
+Next, looking at responsiveness, there again isn't a clear trend, except maybe a correlation between higher prices and longer (!) respones times.
+
+Lastly, we looked at the makeup of real estate and found an overwhelming portion of Airbnbs are "apartments". Looking at the average rate by home type, though, there were no interesting findings except for the price premium to stay in a lighthouse!
 
 ```{r data_exploration, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot(full_listings, aes(review_scores_rating,price))+
@@ -133,13 +144,16 @@ ggplot(full_listings, aes(property_type,price))+
 #Nothing sticks out...except lighthouses!
 ```
 
+To get a general sense of the city, this is a map of the neighborhoods that each property is categorized into.
 
 ```{r new_features, cache = TRUE, message = FALSE, warning = FALSE}
 AMS_neighborhoods.sf <- 
   st_read("https://github.com/SofiaFasullo/MUSA508-final-project/raw/main/neighbourhoods.geojson")
 
 ggplot() +
-  geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))
+  geom_sf(data = AMS_neighborhoods.sf, aes(fill=neighbourhood))+
+  labs(title = "Amsterdam Neighborhoods")+
+  theme_minimal()
 ```
 
 ```{r monuments, cache = TRUE, message = FALSE, warning = FALSE}
@@ -157,6 +171,9 @@ full_listings.sf <-
                               st_coordinates(monuments.sf), k = 3))
 ```
 
+Airbnb tends to be popular with tourists who are likely to pay more to stay close to what they want to visit. So, we brought in the locations of the top 20 landmarks in Amsterdam in order to rate each property's ease of access to where people want to go.
+
+As you can see, there is a strong negative correlation between average distance to the nearest three landmarks and nightly rate.
 
 ```{r graph_monuments_data, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot()+
@@ -167,10 +184,6 @@ ggplot()+
 
 ggplot(full_listings.sf, aes(monuments_nn3,price))+
   geom_jitter(height=0.5,width=0.5)+
-  geom_smooth(method="lm")+
-  stat_cor(method="pearson",
-           label.x=4500,
-           label.y=950) +
   xlim(0,7500)+
   ylim(0,1000)+
   labs(x="Avg. Distance to 3 Landmarks (m)", y="Nightly Rate",
@@ -178,13 +191,19 @@ ggplot(full_listings.sf, aes(monuments_nn3,price))+
              subtitle = "Amsterdam Airbnbs")+ 
 
   geom_point(data=full_listings.sf,mapping=aes(monuments_nn3,price))+
+  geom_smooth(method="lm")+
+  stat_cor(method="pearson",
+           label.x=4500,
+           label.y=950) +
   labs(x="Distance From Monuments", y="Nightly Rate",
              title = "Monuments in Vicinity vs. Price",
              subtitle = "Amsterdam Airbnbs")+
   theme_minimal()
 ```
 
-#Data Engineering
+## Data Engineering
+
+Regression models assume that the data being put into them is normally distributed. To make our data more useful and applicable to this assumption, we can transform it by taking the "log" of price to find a normal distribution.
 
 ``` {r transform_variable, cache = TRUE, message = FALSE, warning = FALSE}
 ggplot()+
@@ -209,6 +228,8 @@ full_listings.sf = full_listings.sf %>% mutate(
 )
 ```
 
+Another piece of feature engineering is turning the host's join date into simply a year. This means the data goes from a string to an integer, something that is more useful for our model. Also, looking at the distribution of host longevity and rate, we can see that newer hosts achieve lower rates than longer-tenured ones. Using this correlation, we can use an assumption for prospective hosts that they will have a lesser rating.
+
 ```{r extract_year_from_date, cache = TRUE, message = FALSE, warning = FALSE }
 length(unique(full_listings.sf$host_since))
 #this variable is different for every observation so it is not meaningful, simplifying it to year would be more helpful
@@ -220,6 +241,15 @@ full_listings.sf = full_listings.sf %>% mutate(
 #full_listings.sf = full_listings.sf %>% mutate(
 #  superhost = ifelse(host_is_superhost=="t",1,0),
 #  year = as.numeric(format(as.Date(full_listings.sf$host_since, format="%Y/%m/%d"),"%Y")))
+
+ggplot(full_listings.sf, aes(year,review_scores_rating))+
+  geom_jitter(height=1,width=1)+
+#  xlim(50,100)+
+#  ylim(0,1000)+
+  labs(x="Year Joined", y="User Ratings",
+             title = "Host Experience vs. Visitor Rating",
+             subtitle = "Amsterdam Airbnbs")+ 
+  theme_minimal()
 
 ```
 
@@ -378,7 +408,7 @@ reg.cv
 
 first.cv <- 
   train(price ~ ., data = st_drop_geometry(full_listings.sf) %>%                                dplyr::select(-c(logPrice,lagPrice)) %>% drop_na(), 
-     method = "lm", trControl = kfolds, na.action = na.pass)
+     method = "lm", trControl = fitControl, na.action = na.pass)
 first.cv
 
 #so cross validation R^2 accuracy is better in the first model with more predictors but the error of the cross validated tests is lower for our tuned model, so we are favoring slightly less accuracy to higher generalizability
