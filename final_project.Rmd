@@ -380,16 +380,32 @@ listings_test = full_listings.sf[-train,]
 
 #fully listed out all the variables because we need to take the log of spatial lag of price
 smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3+year, data=st_drop_geometry(drop_na(listings_train)))
+summary_smarter = summary(smarter_model)
 
 stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Spatial Lag of Price")
 ```
 
 ```{r kitchen_sink_spatial_model, cache = TRUE, message = FALSE, warning = FALSE }
 #kitchen sink with log of price
-smarter_model2 = lm(logPrice ~host_response_time+host_is_superhost+neighbourhood_cleansed+property_type+room_type+accomodates+bathrooms+bedrooms+beds+square_feet+review_scores_rating+reviews_per_month+monunements_nn3+log(lagPrice)+year,data=st_drop_geometry(listings_train))
+smarter_model2 = lm(logPrice ~host_response_time+host_is_superhost+neighbourhood_cleansed+property_type+room_type+accommodates+bathrooms+bedrooms+beds+square_feet+review_scores_rating+reviews_per_month+monuments_nn3+log(lagPrice)+year,data=st_drop_geometry(listings_train))
 
+summary_smarterSink = summary(smarter_model2)
+  
 stargazer(data=smarter_model2,type="text", title = "Summary Statistics for Model Using Spatial Lag of Price-Kitchen Sink")
 ```
+
+```{r}
+#table
+models = c("Kitchen Sink Model", "Selective Model", "Spatial Kitchen Sink Model", "Spatial Selective Model")
+rsquared = c(summary_fullOLS$r.squared, summary_trimmedOLS$r.squared, summary_smarterSink$r.squared, summary_smarter$r.squared)
+
+diagnostics_table = data.frame("Model"=models, "R Squared Value" = rsquared)
+
+kable(diagnostics_table)
+
+```
+
+
 
 #Diagnostics for Generalizability and Accuracy
 
