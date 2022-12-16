@@ -17,7 +17,7 @@ knit: (function(input, encoding) {
 ---
 **Project Description**: Airbnb has become a giant in the hospitality industry by offering ordinary property owners a chance to cash in on their home by renting it out by the night. We came forward to create a more helpful model than Airbnb currently provides to give prospective hosts an accurate forecast of what their home could be worth to a jetsetting visitor.
 
-By creating this model, then packaging it in an easy to use app, homeowners can easily input their home's attributes and get an estimate. We, on the other hand, will quickly become a vital part of Airbnb's business and be a ripe target for acquisition and buyout.
+By creating this model, then packaging it in an easy to use app called MyAirRate, homeowners can easily input their home's attributes and get an estimate. We, on the other hand, will quickly become a vital part of Airbnb's business and be a ripe target for acquisition and buyout.
 
 ```{r setup, echo=FALSE, install= TRUE, cache=TRUE, message=FALSE, results=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
@@ -59,7 +59,9 @@ palette2 <- c("#981FAC","#FF006A")
 
 ```
 
-###Data Collection and Explortation
+###Data Collection and Exploration
+
+To understand the intricacies of the Airbnb housing price trends, MyAirRate sourced a dataset of 2018 Airbnb prices in Amsterdam, capital of the Netherlands. We observed the features of Airbnb units (such as number of rooms, location) that appeared to be correlated to high prices to create our accurate model - but before doing that, we had to make sure our data was easy to work with, and that required some formatting technicalities.
 
 ```{r import listings}
 
@@ -89,7 +91,7 @@ One of the stronger correlations is between user experience and nightly rate. On
 
 The next chart compares bedrooms and price. Unlike in a typical housing market, these is no continuous upward trend as the number of bedrooms increases. Perhaps this is due to the fact that center city apartments tend to be smaller yet more desirable.
 
-Next, looking at responsiveness, there again isn't a clear trend, except maybe a correlation between higher prices and longer (!) respones times.
+Next, looking at responsiveness, there again isn't a clear trend, except maybe a correlation between higher prices and longer response times.
 
 Lastly, we looked at the makeup of real estate and found an overwhelming portion of Airbnbs are "apartments". Looking at the average rate by home type, though, there were no interesting findings except for the price premium to stay in a lighthouse!
 
@@ -144,7 +146,7 @@ ggplot(full_listings, aes(property_type,price))+
 #Nothing sticks out...except lighthouses!
 ```
 
-To get a general sense of the city, this is a map of the neighborhoods that each property is categorized into.
+To get a general sense of the city of Amsterdam, this is a map of the neighborhoods that each property is categorized into.
 
 ```{r new_features, cache = TRUE, message = FALSE, warning = FALSE}
 AMS_neighborhoods.sf <- 
@@ -203,9 +205,12 @@ ggplot(full_listings.sf, aes(monuments_nn3,price))+
 
 ## Data Engineering
 
-Regression models assume that the data being put into them is normally distributed. To make our data more useful and applicable to this assumption, we can transform it by taking the "log" of price to find a normal distribution.
+Regression models assume that the data being put into them is normally distributed, meaning that the majority of the data is an average value, with some higher and some lower values. However, when we look at Airbnb prices, most Airbnbs have lower prices, with an average of about \$152 per night, while very few have very high prices, up to \$8,500 per night. To make our data more useful and applicable to this assumption, we can transform it by taking the mathematical log of price to find a normal distribution. Since we are sticking true to the mathematical assumption, we can trust our model to be more accurate and reliable.
 
 ``` {r transform_variable, cache = TRUE, message = FALSE, warning = FALSE}
+max(full_listings.sf$price)
+mean(full_listings.sf$price)
+
 ggplot()+
   geom_histogram(data=full_listings.sf,mapping=aes(price)) +
   labs(x="Nightly Rate", y="Frequency",
@@ -228,7 +233,9 @@ full_listings.sf = full_listings.sf %>% mutate(
 )
 ```
 
-Another piece of feature engineering is turning the host's join date into simply a year. This means the data goes from a string to an integer, something that is more useful for our model. Also, looking at the distribution of host longevity and rate, we can see that newer hosts achieve lower rates than longer-tenured ones. Using this correlation, we can use an assumption for prospective hosts that they will have a lesser rating.
+Another piece of feature engineering is turning the host's join date into simply a year. Before, the data of the exact day a host started with Airbnb,which was totally different for every host! This was not helpful for us because we wanted to see trends, so we switched the data just to the year a host joined Airbnb. This way, we could compare how many years hosts have been active and if that raises their property prices.
+
+Also, looking at the relationship between Airbnb host experience and user reviews, we can see that newer hosts achieve lower rates than longer-tenured ones. Using this correlation, we can use an assumption for prospective hosts that they will have a lesser rating. So when a new host joins Airbnb and wants to check their MyAirRate, it's not a problem if they don't have existing reviews to input to our model - our model will assume a default, lower review.
 
 ```{r extract_year_from_date, cache = TRUE, message = FALSE, warning = FALSE }
 length(unique(full_listings.sf$host_since))
@@ -254,6 +261,10 @@ ggplot(full_listings.sf, aes(year,review_scores_rating))+
 ```
 
 #Fitting a "Kitchen Sink" Model
+
+MyAirRate began the process of tuning an accurate model by just putting all the data together that we had and seeing how it can mathematically predict price. We used an ordinary least squares model that assumes that each variable (ie number of bedrooms) can be linearly related to Airbnb price. Putting all this data together is often called a "kitchen sink" model, and it is a good place to start.
+
+To test our model, we split our Amsterdam Airbnb dataset into two datasets. One group of Airbnbs will have all their information fed into a model generator that sees their relationship to price. Then a model will be created, and we'll test it on the second dataset we had set aside.
 ```{r partion_data, cache = TRUE, message = FALSE, warning = FALSE }
 #split dataset into training and testing before fitting regression model
 
@@ -267,9 +278,9 @@ listings_test = full_listings.sf[-train,]
 
 #because there are so many variables it would take up lots of space to display the whole summary, so we will just display the important parts in a table comparing models
 
-#host_since and monuments_nn3 are not useful, neighborhood has too many NAs, and price is directly correlated to logPrice
+#neighborhood has too many NAs, and price is directly correlated to logPrice
 
-fullOLS.lm = lm(logPrice~.,data= dplyr :: select(listings_train,-c(host_since, neighbourhood, monuments_nn3, price)) %>% st_drop_geometry() %>%  na.omit())
+fullOLS.lm = lm(logPrice~.,data= dplyr :: select(listings_train,-c(host_since, neighbourhood, price)) %>% st_drop_geometry() %>%  na.omit())
 
 summary_fullOLS = summary(fullOLS.lm)
 stargazer(data=fullOLS.lm, type="text", title = "Summary Statistics for Kitchen-Sink Model")
@@ -278,6 +289,9 @@ stargazer(data=fullOLS.lm, type="text", title = "Summary Statistics for Kitchen-
 
 
 #Assessing Which Variables to Use
+
+The "kitchen sink" model uses every feature present in the dataset, but they may not all be necessary. For example, if an Airbnb has an extra bedroom, it probably has an extra bed, so number of beds would be redundant info. These features are correlated, and having these in your model is called having collinearity, which is unwanted. Also, some features might not be closely correlated with price. Looking at how features correlate with each other and price is a helpful way to pick out the best features for our model.
+
 ```{r corr_table, cache = TRUE, message = FALSE, warning = FALSE}
 numericVars <- select_if(st_drop_geometry(full_listings.sf), is.numeric) %>% na.omit()
 
@@ -293,10 +307,9 @@ ggcorrplot(
 ```
 
 #Fitting Models based on Selective Variables
-```{r selective_model, cache = TRUE, message = FALSE, warning = FALSE }
-#the model based on our diagnostics that would be useful
-#the way we calculated n made it perfectly collinear with the neighborhood, wwhich is not helpful for us
 
+This model has fewer variables, removing the redundant variables. We can see that the mathematical diagnostics are worse for this model; we have a lower R^2 value and higher error. This means the model is less close to predicting correct prices and less of the variation in price is caught byt the model. However, we will not scrap the model just yet. First, we will tweak it to add new features. Lastly, we see that our "kitchen sink" model is great to predict prices in Amsterdam, but what about in other cities? Because there is so much information in that model, it could be over-tailored to data in Amsterdam. A more minimal model might be worse at predicting exact prices in Amsterdam, but it could be that it just uses the variables that are truly powerful in most cases. Also, consider this data is from 2018. We do not need to extremely accurately predic 2018 rates anymore! We need a dataset that is consistent for future years and across different cities.
+```{r selective_model, cache = TRUE, message = FALSE, warning = FALSE }
 
 trimmedOLS.lm = lm(logPrice~host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3+year, data=st_drop_geometry(listings_train) %>% drop_na())
 
@@ -308,12 +321,12 @@ stargazer(data=trimmedOLS.lm, type="text", title = "Summary Statistics for Model
 
 
 #Spatial Clustering of Price - the "Secret Sauce" to a Model
+
+MyAirRate creators are based at the University of Pennsylvania's Master of Urban Spatial Analytics Program to research spatial effects of trends. With robust research to inform our approach, we decided to look at geographic trends of prices. Airbnb owners with high prices are likely located near other Airbnb owners with high prices. We created a feature called "lagPrice" which means the average price of the nearest 5 properties in the area.
+
+You can see from our map of average price per neighborhood that higher priced Airbnbs are located in the center of Amsterdam. This may be due to monuments and tourist attractions there, which we have already accounted for. This spatial lag of price creates a higher-resolution method to pick up little complexities and outside "hot spots".
 ```{r nearest_neighbor, cache = TRUE, message = FALSE, warning = FALSE }
 #basic understanding of price distribution
-
-ggplot() +
-  geom_sf(data = full_listings.sf, aes(color=q5(logPrice)), legend=FALSE)
-#well this isn't helpful!
 
 #aggregate price by neighborhood instead
 AMS_neighborhoods.sf = full_listings.sf %>% 
@@ -339,7 +352,7 @@ ggplot() +
   
   
 ```
-
+We can see that the average Airbnb price of the nearest 5 Airbnbs is strongly and significantly coordinated with the price of a specific Airbnb. This encourages us to use our lagPrice feature in our model.
 
 ```{r map_lagPrice, cache = TRUE, message = FALSE, warning = FALSE }
 coords <- st_coordinates(full_listings.sf) 
@@ -359,12 +372,13 @@ ggplot(data=full_listings.sf,mapping = aes(x=lagPrice,y=price)) +
   theme_minimal()
 
 ```
-
+Our model that includes spatial lag of price still does worse than our "kitchen sink" model, but again we will look at how consistent this model.
 ```{r model_spatial_lag, cache = TRUE, message = FALSE, warning = FALSE }
 set.seed(111)
 listings_train = full_listings.sf[train,]
 listings_test = full_listings.sf[-train,]
 
+#fully listed out all the variables because we need to take the log of spatial lag of price
 smarter_model = lm(logPrice ~ log10(lagPrice)+host_response_time+host_is_superhost+neighbourhood_cleansed+bedrooms+review_scores_rating+reviews_per_month+monuments_nn3+year, data=st_drop_geometry(drop_na(listings_train)))
 
 stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model Using Spatial Lag of Price")
@@ -372,12 +386,16 @@ stargazer(data=smarter_model, type="text", title = "Summary Statistics for Model
 
 ```{r kitchen_sink_spatial_model, cache = TRUE, message = FALSE, warning = FALSE }
 #kitchen sink with log of price
-smarter_model2 = lm(logPrice ~., data=st_drop_geometry(drop_na(select(listings_train,-price))))
-summary(smarter_model)
+smarter_model2 = lm(logPrice ~host_response_time+host_is_superhost+neighbourhood_cleansed+property_type+room_type+accomodates+bathrooms+bedrooms+beds+square_feet+review_scores_rating+reviews_per_month+monunements_nn3+log(lagPrice)+year,data=st_drop_geometry(listings_train))
 
+stargazer(data=smarter_model2,type="text", title = "Summary Statistics for Model Using Spatial Lag of Price-Kitchen Sink")
 ```
 
 #Diagnostics for Generalizability and Accuracy
+
+Our model's accuracy can be described as how closely our model predicts Airbnb prices on our test dataset, whereas our model's generalizability can be described as how consistently our model predicts Airbnb prices generally over many different datasets. We only have the one Amsterdam dataset, so we test for accuracy by seeing how well our model predicts on our "testing" dataset that we set aside while creating the model. We imitate the effect of multiple different datasets by doing a mathematical process called cross-validation, where we split "training" and "testing" datasets multiple times, and see how consistent our model is across multiple different "test" datasets.
+
+Our dataset is from Amsterdam and was collected in 2018, but we want MyAirRate to be consistent in multiple cities and over many years, so for this reason, we care more about generalizability. You can see that our first model has a higher R^2 value, which means it more of the price variation is explained by our first model, the "kitchen sink model". However, our final model has a lower mean absolute error across cross-validation datasets. Mean absolute error (MAE) is how we test accuracy on a test dataset - it takes the absolute distance from the true price of overestimated price and underestimated price and then the average. We chose not to use percent error (percent of total price) because we feel that absolute error is easier to understand. A new MyAirRate user would understand $47 error range better than 10%, for example.
 ```{r diagnostics, cache = TRUE, message = FALSE, warning = FALSE }
 #smarter_model seems like our best bet
 #accuracy test: error for test dataset
